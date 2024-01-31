@@ -3,15 +3,21 @@ package traefik_ipwhitelist
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
+	"os"
 
 	"github.com/dmahmalat/traefik-ipwhitelist/ip"
-	"github.com/dmahmalat/traefik-ipwhitelist/log"
 )
 
 const (
 	moduleName = "SkyloftWhiteLister"
+)
+
+var (
+	logger = log.New(io.Discard, fmt.Sprintf("[INFO] %s: ", moduleName), log.Ldate|log.Ltime)
 )
 
 type skyloftWhiteLister struct {
@@ -31,8 +37,8 @@ func CreateConfig() *SkyloftWhiteList {
 }
 
 func New(ctx context.Context, next http.Handler, config *SkyloftWhiteList, name string) (http.Handler, error) {
-	logger := log.New(moduleName, log.Info)
-	logger.Debug("Creating middleware")
+	logger.SetOutput(os.Stdout)
+	//logger.Println("Creating middleware")
 
 	if len(config.SourceRange) == 0 {
 		return nil, fmt.Errorf("sourceRange is empty, %s not created", moduleName)
@@ -43,7 +49,7 @@ func New(ctx context.Context, next http.Handler, config *SkyloftWhiteList, name 
 		return nil, fmt.Errorf("cannot parse CIDR whitelist %s: %w", config.SourceRange, err)
 	}
 
-	logger.Debugf("Setting up %s with sourceRange: %s", moduleName, config.SourceRange)
+	//logger.Printf("Setting up %s with sourceRange: %s\n", moduleName, config.SourceRange)
 
 	return &skyloftWhiteLister{
 		name:        name,
@@ -61,28 +67,28 @@ func (wl *skyloftWhiteLister) GetIP(req *http.Request) string {
 }
 
 func (wl *skyloftWhiteLister) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	logger := log.New(moduleName, log.Info)
+	logger.SetOutput(os.Stdout)
 
 	clientIP := wl.GetIP(req)
 	err := wl.whiteLister.IsAuthorized(clientIP)
 	if err != nil {
 		msg := fmt.Sprintf("Rejecting IP %s: %v", clientIP, err)
-		logger.Debug(msg)
+		logger.Println(msg)
 		reject(rw)
 		return
 	}
-	logger.Debugf("Accepting IP %s", clientIP)
+	//logger.Printf("Accepting IP %s\n", clientIP)
 
 	wl.next.ServeHTTP(rw, req)
 }
 
 func reject(rw http.ResponseWriter) {
-	logger := log.New(moduleName, log.Info)
+	logger.SetOutput(os.Stdout)
 
 	statusCode := http.StatusForbidden
 	rw.WriteHeader(statusCode)
 	_, err := rw.Write([]byte(http.StatusText(statusCode)))
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Fatal(err.Error())
 	}
 }

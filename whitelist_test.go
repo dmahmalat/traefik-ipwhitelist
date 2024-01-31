@@ -34,7 +34,7 @@ func TestNewIPWhiteLister(t *testing.T) {
 			t.Parallel()
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-			whiteLister, err := New(context.Background(), next, test.whiteList, "traefikTest")
+			whiteLister, err := New(context.Background(), next, &test.whiteList, "traefikTest")
 
 			if test.expectedError {
 				if err == nil {
@@ -83,7 +83,7 @@ func TestIPWhiteLister_ServeHTTP(t *testing.T) {
 			t.Parallel()
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-			whiteLister, err := New(context.Background(), next, test.whiteList, "traefikTest")
+			whiteLister, err := New(context.Background(), next, &test.whiteList, "traefikTest")
 			if err != nil {
 				t.Errorf("expected no error but got one")
 			}
