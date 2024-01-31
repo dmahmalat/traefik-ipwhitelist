@@ -1,4 +1,4 @@
-package skyloftwhitelist
+package traefik_ipwhitelist
 
 import (
 	"context"
@@ -22,6 +22,12 @@ type skyloftWhiteLister struct {
 
 type SkyloftWhiteList struct {
 	SourceRange []string `json:"sourceRange,omitempty" toml:"sourceRange,omitempty" yaml:"sourceRange,omitempty"`
+}
+
+func CreateConfig() *SkyloftWhiteList {
+	return &SkyloftWhiteList{
+		SourceRange: []string{"127.0.0.1"},
+	}
 }
 
 func New(ctx context.Context, next http.Handler, config SkyloftWhiteList, name string) (http.Handler, error) {

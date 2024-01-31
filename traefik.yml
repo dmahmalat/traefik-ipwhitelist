@@ -5,4 +5,5 @@ import: github.com/dmahmalat/traefik-ipwhitelist
 summary: Skyloft IP Whitelist
 
 testData:
-  SourceRange: 127.0.0.1
+  SourceRange:
+  - 127.0.0.1

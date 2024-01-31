@@ -1,4 +1,4 @@
-package skyloftwhitelist
+package traefik_ipwhitelist
 
 import (
 	"context"
