@@ -5,9 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewIPWhiteLister(t *testing.T) {
@@ -40,10 +37,16 @@ func TestNewIPWhiteLister(t *testing.T) {
 			whiteLister, err := New(context.Background(), next, test.whiteList, "traefikTest")
 
 			if test.expectedError {
-				assert.Error(t, err)
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
 			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, whiteLister)
+				if err != nil {
+					t.Errorf("expected no error but got one")
+				}
+				if whiteLister == nil {
+					t.Errorf("expected whiteLister to be not nil but it was")
+				}
 			}
 		})
 	}
@@ -81,7 +84,9 @@ func TestIPWhiteLister_ServeHTTP(t *testing.T) {
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 			whiteLister, err := New(context.Background(), next, test.whiteList, "traefikTest")
-			require.NoError(t, err)
+			if err != nil {
+				t.Errorf("expected no error but got one")
+			}
 
 			recorder := httptest.NewRecorder()
 
@@ -93,7 +98,9 @@ func TestIPWhiteLister_ServeHTTP(t *testing.T) {
 
 			whiteLister.ServeHTTP(recorder, req)
 
-			assert.Equal(t, test.expected, recorder.Code)
+			if test.expected != recorder.Code {
+				t.Errorf("expected test.expected and recorder.Code to be equal but they weren't")
+			}
 		})
 	}
 }

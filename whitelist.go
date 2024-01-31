@@ -2,20 +2,16 @@ package skyloftwhitelist
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
-	"github.com/traefik/traefik/v3/pkg/ip"
-	"github.com/traefik/traefik/v3/pkg/middlewares"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/dmahmalat/traefik-ipwhitelist/ip"
+	"github.com/dmahmalat/traefik-ipwhitelist/log"
 )
 
 const (
-	typeName = "SkyloftWhiteLister"
+	moduleName = "SkyloftWhiteLister"
 )
 
 type skyloftWhiteLister struct {
@@ -28,18 +24,12 @@ type SkyloftWhiteList struct {
 	SourceRange []string `json:"sourceRange,omitempty" toml:"sourceRange,omitempty" yaml:"sourceRange,omitempty"`
 }
 
-func SetStatusErrorf(ctx context.Context, format string, args ...interface{}) {
-	if span := trace.SpanFromContext(ctx); span != nil {
-		span.SetStatus(codes.Error, fmt.Sprintf(format, args...))
-	}
-}
-
 func New(ctx context.Context, next http.Handler, config SkyloftWhiteList, name string) (http.Handler, error) {
-	logger := middlewares.GetLogger(ctx, name, typeName)
-	logger.Debug().Msg("Creating middleware")
+	logger := log.New(moduleName, log.Info)
+	logger.Debug("Creating middleware")
 
 	if len(config.SourceRange) == 0 {
-		return nil, errors.New("sourceRange is empty, SkyloftWhiteLister not created")
+		return nil, fmt.Errorf("sourceRange is empty, %s not created", moduleName)
 	}
 
 	checker, err := ip.NewChecker(config.SourceRange)
@@ -47,7 +37,7 @@ func New(ctx context.Context, next http.Handler, config SkyloftWhiteList, name s
 		return nil, fmt.Errorf("cannot parse CIDR whitelist %s: %w", config.SourceRange, err)
 	}
 
-	logger.Debug().Msgf("Setting up SkyloftWhiteLister with sourceRange: %s", config.SourceRange)
+	logger.Debugf("Setting up %s with sourceRange: %s", moduleName, config.SourceRange)
 
 	return &skyloftWhiteLister{
 		name:        name,
@@ -64,34 +54,29 @@ func (wl *skyloftWhiteLister) GetIP(req *http.Request) string {
 	return ip
 }
 
-func (wl *skyloftWhiteLister) GetTracingInformation() (string, string, trace.SpanKind) {
-	return wl.name, typeName, trace.SpanKindInternal
-}
-
 func (wl *skyloftWhiteLister) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	logger := middlewares.GetLogger(req.Context(), wl.name, typeName)
-	ctx := logger.WithContext(req.Context())
+	logger := log.New(moduleName, log.Info)
 
 	clientIP := wl.GetIP(req)
 	err := wl.whiteLister.IsAuthorized(clientIP)
 	if err != nil {
 		msg := fmt.Sprintf("Rejecting IP %s: %v", clientIP, err)
-		logger.Debug().Msg(msg)
-		SetStatusErrorf(req.Context(), msg)
-		reject(ctx, rw)
+		logger.Debug(msg)
+		reject(rw)
 		return
 	}
-	logger.Debug().Msgf("Accepting IP %s", clientIP)
+	logger.Debugf("Accepting IP %s", clientIP)
 
 	wl.next.ServeHTTP(rw, req)
 }
 
-func reject(ctx context.Context, rw http.ResponseWriter) {
-	statusCode := http.StatusForbidden
+func reject(rw http.ResponseWriter) {
+	logger := log.New(moduleName, log.Info)
 
+	statusCode := http.StatusForbidden
 	rw.WriteHeader(statusCode)
 	_, err := rw.Write([]byte(http.StatusText(statusCode)))
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Send()
+		logger.Error(err.Error())
 	}
 }
