@@ -30,7 +30,7 @@ func CreateConfig() *SkyloftWhiteList {
 	}
 }
 
-func New(ctx context.Context, next http.Handler, config SkyloftWhiteList, name string) (http.Handler, error) {
+func New(ctx context.Context, next http.Handler, config *SkyloftWhiteList, name string) (http.Handler, error) {
 	logger := log.New(moduleName, log.Info)
 	logger.Debug("Creating middleware")
 
