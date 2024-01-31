@@ -3,9 +3,6 @@ package ip
 import (
 	"net"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestIsAuthorized(t *testing.T) {
@@ -41,13 +38,19 @@ func TestIsAuthorized(t *testing.T) {
 			t.Parallel()
 
 			ipChecker, err := NewChecker(test.allowList)
-			require.NoError(t, err)
+			if err != nil {
+				t.Error("expected no error but got one")
+			}
 
 			err = ipChecker.IsAuthorized(test.remoteAddr)
 			if test.authorized {
-				require.NoError(t, err)
+				if err != nil {
+					t.Error("expected no error but got one")
+				}
 			} else {
-				require.Error(t, err)
+				if err == nil {
+					t.Error("expected an error but got none")
+				}
 			}
 		})
 	}
@@ -123,13 +126,22 @@ func TestNew(t *testing.T) {
 
 			ipChecker, err := NewChecker(test.trustedIPs)
 			if test.errMessage != "" {
-				require.EqualError(t, err, test.errMessage)
+				if err == nil || err.Error() != test.errMessage {
+					t.Error("expected error with message test.errMessage but didn't get it")
+				}
 			} else {
-				require.NoError(t, err)
+				if err != nil {
+					t.Error("expected no error but got one")
+				}
 				for index, actual := range ipChecker.authorizedIPsNet {
 					expected := test.expectedAuthorizedIPs[index]
-					assert.Equal(t, expected.IP, actual.IP)
-					assert.Equal(t, expected.Mask.String(), actual.Mask.String())
+					if !expected.IP.Equal(actual.IP) {
+						t.Error("expected expected.IP and actual.IP to be equal but they were not")
+					}
+
+					if expected.Mask.String() != actual.Mask.String() {
+						t.Error("expected expected.Mask.String() and actual.Mask.String() to be equal but they were not")
+					}
 				}
 			}
 		})
@@ -295,19 +307,31 @@ func TestContainsIsAllowed(t *testing.T) {
 
 			ipChecker, err := NewChecker(test.trustedIPs)
 
-			require.NoError(t, err)
-			require.NotNil(t, ipChecker)
+			if err != nil {
+				t.Error("expected no error but got one")
+			}
+			if ipChecker == nil {
+				t.Error("expected ipChecker to be not nil but it was")
+			}
 
 			for _, testIP := range test.passIPs {
 				allowed, err := ipChecker.Contains(testIP)
-				require.NoError(t, err)
-				assert.Truef(t, allowed, "%s should have passed.", testIP)
+				if err != nil {
+					t.Error("expected no error but got one")
+				}
+				if !allowed {
+					t.Errorf("%s should have passed.", testIP)
+				}
 			}
 
 			for _, testIP := range test.rejectIPs {
 				allowed, err := ipChecker.Contains(testIP)
-				require.NoError(t, err)
-				assert.Falsef(t, allowed, "%s should not have passed.", testIP)
+				if err != nil {
+					t.Error("expected no error but got one")
+				}
+				if allowed {
+					t.Errorf("%s should not have passed.", testIP)
+				}
 			}
 		})
 	}
@@ -323,10 +347,14 @@ func TestContainsBrokenIPs(t *testing.T) {
 	}
 
 	ipChecker, err := NewChecker([]string{"1.2.3.4/24"})
-	require.NoError(t, err)
+	if err != nil {
+		t.Error("expected no error but got one")
+	}
 
 	for _, testIP := range brokenIPs {
 		_, err := ipChecker.Contains(testIP)
-		assert.Error(t, err)
+		if err == nil {
+			t.Error("expected an error but got none")
+		}
 	}
 }
