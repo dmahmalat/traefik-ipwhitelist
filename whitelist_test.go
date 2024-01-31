@@ -73,7 +73,7 @@ func TestIPWhiteLister_ServeHTTP(t *testing.T) {
 				SourceRange: []string{"20.20.20.20"},
 			},
 			remoteAddr: "20.20.20.21:1234",
-			expected:   403,
+			expected:   404,
 		},
 	}
 
