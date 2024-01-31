@@ -21,7 +21,7 @@ type skyloftWhiteLister struct {
 }
 
 type SkyloftWhiteList struct {
-	SourceRange []string `json:"sourceRange,omitempty" toml:"sourceRange,omitempty" yaml:"sourceRange,omitempty"`
+	SourceRange []string
 }
 
 func CreateConfig() *SkyloftWhiteList {
