@@ -7,32 +7,94 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/dmahmalat/traefik-ipwhitelist/ip"
 )
 
 const (
-	moduleName = "SkyloftWhiteLister"
+	moduleName  = "SkyloftWhiteLister"
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
 )
 
 var (
-	logger = log.New(io.Discard, fmt.Sprintf("[INFO] %s: ", moduleName), log.Ldate|log.Ltime)
+	logger    = log.New(io.Discard, fmt.Sprintf("[INFO] %s: ", moduleName), log.Ldate|log.Ltime)
+	uriRegexp = regexp.MustCompile(`^(https?):\/\/(\[[\w:.]+\]|[\w\._-]+)?(:\d+)?(.*)$`)
 )
 
 type skyloftWhiteLister struct {
 	name        string
 	whiteLister *ip.Checker
+	regex       string
+	replacement string
 	next        http.Handler
 }
 
 type SkyloftWhiteList struct {
+	Regex       string
+	Replacement string
 	SourceRange []string
+}
+
+type moveHandler struct {
+	location  *url.URL
+	permanent bool
 }
 
 func CreateConfig() *SkyloftWhiteList {
 	return &SkyloftWhiteList{
+		Regex:       "^(?:https?://)?(?:[^@/]+@)?([^:/]+)(?:.*)",
+		Replacement: "https://$1/notfound",
 		SourceRange: []string{"127.0.0.1"},
+	}
+}
+
+func (wl *skyloftWhiteLister) GetIP(req *http.Request) string {
+	ip, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return req.RemoteAddr
+	}
+	return ip
+}
+
+func rawURL(req *http.Request) string {
+	scheme := schemeHTTP
+	host := req.Host
+	port := ""
+	uri := req.RequestURI
+
+	if match := uriRegexp.FindStringSubmatch(req.RequestURI); len(match) > 0 {
+		scheme = match[1]
+
+		if len(match[2]) > 0 {
+			host = match[2]
+		}
+
+		if len(match[3]) > 0 {
+			port = match[3]
+		}
+
+		uri = match[4]
+	}
+
+	if req.TLS != nil {
+		scheme = schemeHTTPS
+	}
+
+	return strings.Join([]string{scheme, "://", host, port, uri}, "")
+}
+
+func rejectWith404(rw http.ResponseWriter) {
+	statusCode := http.StatusNotFound
+	rw.WriteHeader(statusCode)
+
+	_, err := rw.Write([]byte(http.StatusText(statusCode)))
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -54,16 +116,10 @@ func New(ctx context.Context, next http.Handler, config *SkyloftWhiteList, name 
 	return &skyloftWhiteLister{
 		name:        name,
 		whiteLister: checker,
+		regex:       config.Regex,
+		replacement: config.Replacement,
 		next:        next,
 	}, nil
-}
-
-func (wl *skyloftWhiteLister) GetIP(req *http.Request) string {
-	ip, _, err := net.SplitHostPort(req.RemoteAddr)
-	if err != nil {
-		return req.RemoteAddr
-	}
-	return ip
 }
 
 func (wl *skyloftWhiteLister) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -72,23 +128,66 @@ func (wl *skyloftWhiteLister) ServeHTTP(rw http.ResponseWriter, req *http.Reques
 	clientIP := wl.GetIP(req)
 	err := wl.whiteLister.IsAuthorized(clientIP)
 	if err != nil {
-		msg := fmt.Sprintf("Rejecting IP %s: %v", clientIP, err)
-		logger.Println(msg)
-		reject(rw)
+		logger.Printf("Rejecting IP: %v\n", err)
+		wl.reject(rw, req)
 		return
 	}
-	//logger.Printf("Accepting IP %s\n", clientIP)
 
+	//logger.Printf("Accepting IP %s\n", clientIP)
 	wl.next.ServeHTTP(rw, req)
 }
 
-func reject(rw http.ResponseWriter) {
+func (wl *skyloftWhiteLister) reject(rw http.ResponseWriter, req *http.Request) {
 	logger.SetOutput(os.Stdout)
+	oldURL := rawURL(req)
 
-	statusCode := http.StatusForbidden
-	rw.WriteHeader(statusCode)
-	_, err := rw.Write([]byte(http.StatusText(statusCode)))
+	// If the Regexp doesn't match, simply return 404.
+	match, err := regexp.MatchString(wl.regex, oldURL)
+	if err != nil || !match {
+		rejectWith404(rw)
+		return
+	}
+
+	// Apply a rewrite regexp to the URL.
+	regex := regexp.MustCompile(wl.regex)
+	newURL := regex.ReplaceAllString(oldURL, wl.replacement)
+
+	// Parse the rewritten URL and replace request URL with it.
+	parsedURL, err := url.Parse(newURL)
 	if err != nil {
-		logger.Fatal(err.Error())
+		rejectWith404(rw)
+		return
+	}
+
+	// Replace the URL
+	if newURL != oldURL {
+		handler := &moveHandler{location: parsedURL, permanent: false}
+		handler.ServeHTTP(rw, req)
+		return
+	}
+
+	// If we fall here, simply reject with 404.
+	rejectWith404(rw)
+}
+
+func (m *moveHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	rw.Header().Set("Location", m.location.String())
+
+	status := http.StatusFound
+	if req.Method != http.MethodGet {
+		status = http.StatusTemporaryRedirect
+	}
+
+	if m.permanent {
+		status = http.StatusMovedPermanently
+		if req.Method != http.MethodGet {
+			status = http.StatusPermanentRedirect
+		}
+	}
+
+	rw.WriteHeader(status)
+	_, err := rw.Write([]byte(http.StatusText(status)))
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
 	}
 }
