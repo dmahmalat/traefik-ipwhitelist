@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dmahmalat/traefik-ipwhitelist/ip"
+	"github.com/lost-woods/traefik-ipwhitelist/ip"
 )
 
 const (

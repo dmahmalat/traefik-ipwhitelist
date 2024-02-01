@@ -1,4 +1,4 @@
-module github.com/dmahmalat/traefik-ipwhitelist
+module github.com/lost-woods/traefik-ipwhitelist
 
 go 1.21
 
