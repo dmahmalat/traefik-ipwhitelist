@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 
@@ -98,6 +99,9 @@ func rejectWith404(rw http.ResponseWriter) {
 }
 
 func New(ctx context.Context, next http.Handler, config *SkyloftWhiteList, name string) (http.Handler, error) {
+	// Initialize logger
+	logger.SetOutput(os.Stdout)
+
 	//logger.Println("Creating middleware")
 
 	if len(config.SourceRange) == 0 {
