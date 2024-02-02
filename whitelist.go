@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 
@@ -99,7 +98,6 @@ func rejectWith404(rw http.ResponseWriter) {
 }
 
 func New(ctx context.Context, next http.Handler, config *SkyloftWhiteList, name string) (http.Handler, error) {
-	logger.SetOutput(os.Stdout)
 	//logger.Println("Creating middleware")
 
 	if len(config.SourceRange) == 0 {
@@ -123,12 +121,10 @@ func New(ctx context.Context, next http.Handler, config *SkyloftWhiteList, name 
 }
 
 func (wl *skyloftWhiteLister) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	logger.SetOutput(os.Stdout)
-
 	clientIP := wl.GetIP(req)
 	err := wl.whiteLister.IsAuthorized(clientIP)
 	if err != nil {
-		logger.Printf("Rejecting IP: %v\n", err)
+		logger.Printf("URL: %s %s - Rejecting IP: %v\n", req.Host, req.URL.Path, err)
 		wl.reject(rw, req)
 		return
 	}
@@ -138,7 +134,6 @@ func (wl *skyloftWhiteLister) ServeHTTP(rw http.ResponseWriter, req *http.Reques
 }
 
 func (wl *skyloftWhiteLister) reject(rw http.ResponseWriter, req *http.Request) {
-	logger.SetOutput(os.Stdout)
 	oldURL := rawURL(req)
 
 	// If the Regexp doesn't match, simply return 404.
